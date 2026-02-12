@@ -1,17 +1,17 @@
-import { useState } from 'react';
-import { Save, Shield, UserPlus, Bell, Globe, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Shield, UserPlus, Bell, Globe, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 const AdminSettings = () => {
   const { getToken } = useAuth();
   const [restaurantSettings, setRestaurantSettings] = useState({
-    name: 'NutriPlan Pro',
-    email: 'contact@nutriplan.com',
-    phone: '+1234567890',
-    address: '123 Health Street, Wellness City',
-    delivery_radius: '10',
-    min_order_amount: '15.00',
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    delivery_radius: '',
+    min_order_amount: '',
   });
 
   const [notifications, setNotifications] = useState({
@@ -29,6 +29,45 @@ const AdminSettings = () => {
   const [adminError, setAdminError] = useState('');
   const [adminSuccess, setAdminSuccess] = useState('');
   const [creatingAdmin, setCreatingAdmin] = useState(false);
+  
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingRestaurant, setSavingRestaurant] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  // Fetch site settings on component mount
+  useEffect(() => {
+    fetchSiteSettings();
+  }, []);
+
+  const fetchSiteSettings = async () => {
+    try {
+      setLoadingSettings(true);
+      setSettingsError('');
+      const settings = await api.get('/site-settings');
+      
+      setRestaurantSettings({
+        name: settings.name || '',
+        email: settings.email || '',
+        phone: settings.phone || '',
+        address: settings.address || '',
+        delivery_radius: settings.delivery_radius?.toString() || '',
+        min_order_amount: settings.min_order_amount?.toString() || '',
+      });
+
+      setNotifications({
+        email_orders: settings.email_orders ?? true,
+        email_customers: settings.email_customers ?? true,
+        sms_orders: settings.sms_orders ?? false,
+      });
+    } catch (error) {
+      console.error('Error fetching site settings:', error);
+      setSettingsError('Failed to load settings. Please refresh the page.');
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
 
   const handleRestaurantChange = (e) => {
     const { name, value } = e.target;
@@ -40,9 +79,66 @@ const AdminSettings = () => {
     setNotifications(prev => ({ ...prev, [name]: checked }));
   };
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    alert('Settings saved successfully!');
+    setSettingsError('');
+    setSettingsSuccess('');
+    setSavingRestaurant(true);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        setSettingsError('You must be logged in as an admin to save settings');
+        setSavingRestaurant(false);
+        return;
+      }
+
+      const response = await api.put('/site-settings/restaurant', {
+        name: restaurantSettings.name,
+        email: restaurantSettings.email,
+        phone: restaurantSettings.phone,
+        address: restaurantSettings.address,
+        delivery_radius: parseFloat(restaurantSettings.delivery_radius) || 10,
+        min_order_amount: parseFloat(restaurantSettings.min_order_amount) || 15.00,
+      }, token);
+
+      setSettingsSuccess('Restaurant settings saved successfully!');
+      setTimeout(() => setSettingsSuccess(''), 3000);
+    } catch (error) {
+      console.error('Error saving restaurant settings:', error);
+      setSettingsError(error.message || 'Failed to save restaurant settings');
+    } finally {
+      setSavingRestaurant(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSettingsError('');
+    setSettingsSuccess('');
+    setSavingNotifications(true);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        setSettingsError('You must be logged in as an admin to save settings');
+        setSavingNotifications(false);
+        return;
+      }
+
+      const response = await api.put('/site-settings/notifications', {
+        email_orders: notifications.email_orders,
+        email_customers: notifications.email_customers,
+        sms_orders: notifications.sms_orders,
+      }, token);
+
+      setSettingsSuccess('Notification settings saved successfully!');
+      setTimeout(() => setSettingsSuccess(''), 3000);
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      setSettingsError(error.message || 'Failed to save notification settings');
+    } finally {
+      setSavingNotifications(false);
+    }
   };
 
   const handleAdminFormChange = (e) => {
@@ -101,12 +197,41 @@ const AdminSettings = () => {
     }
   };
 
+  if (loadingSettings) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-yellow-400 mx-auto mb-4" />
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Admin Settings</h1>
         <p className="text-gray-600 mt-1">Manage system configuration and preferences</p>
       </div>
+
+      {(settingsError || settingsSuccess) && (
+        <div className={`mb-6 p-4 rounded-xl flex items-start space-x-2 ${
+          settingsError ? 'bg-red-50 border-2 border-red-400 text-red-700' : 'bg-green-50 border-2 border-green-400 text-green-700'
+        }`}>
+          {settingsError ? (
+            <>
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span className="text-sm font-medium">{settingsError}</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span className="text-sm font-medium">{settingsSuccess}</span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -181,6 +306,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     name="delivery_radius"
+                    step="0.1"
                     value={restaurantSettings.delivery_radius}
                     onChange={handleRestaurantChange}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
@@ -204,10 +330,20 @@ const AdminSettings = () => {
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-xl hover:from-yellow-500 hover:to-yellow-700 transition font-bold shadow-lg"
+                disabled={savingRestaurant}
+                className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-xl hover:from-yellow-500 hover:to-yellow-700 transition font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-5 h-5" />
-                <span>Save Restaurant Settings</span>
+                {savingRestaurant ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    <span>Save Restaurant Settings</span>
+                  </>
+                )}
               </button>
             </form>
           </div>
@@ -265,11 +401,21 @@ const AdminSettings = () => {
             </div>
 
             <button
-              onClick={() => alert('Notification settings saved!')}
-              className="w-full mt-6 flex items-center justify-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-bold"
+              onClick={handleSaveNotifications}
+              disabled={savingNotifications}
+              className="w-full mt-6 flex items-center justify-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-5 h-5" />
-              <span>Save Notification Settings</span>
+              {savingNotifications ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />
+                  <span>Save Notification Settings</span>
+                </>
+              )}
             </button>
           </div>
         </div>

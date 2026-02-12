@@ -10,6 +10,7 @@ import healthRoutes from './routes/healthRoutes.js';
 import mealPlanRoutes from './routes/mealPlanRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
+import siteSettingsRoutes from './routes/siteSettingsRoutes.js';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/meal-plans', mealPlanRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/site-settings', siteSettingsRoutes);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

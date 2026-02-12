@@ -402,3 +402,50 @@ BEGIN
   RETURN total_price;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- ==========================================
+-- SITE SETTINGS TABLE
+-- ==========================================
+-- This table stores restaurant/site configuration settings
+-- Only one row should exist (singleton pattern)
+
+CREATE TABLE IF NOT EXISTS site_settings (
+  id                    INT PRIMARY KEY DEFAULT 1,
+  
+  -- Restaurant Information
+  name                  VARCHAR(150) NOT NULL DEFAULT 'NutriPlan Pro',
+  email                 VARCHAR(150) NOT NULL DEFAULT 'contact@nutriplan.com',
+  phone                 VARCHAR(20) NOT NULL DEFAULT '+1234567890',
+  address               TEXT NOT NULL DEFAULT '123 Health Street, Wellness City',
+  
+  -- Delivery Settings
+  delivery_radius       NUMERIC(5,2) NOT NULL DEFAULT 10.00 CHECK (delivery_radius >= 0),
+  min_order_amount      NUMERIC(10,2) NOT NULL DEFAULT 15.00 CHECK (min_order_amount >= 0),
+  
+  -- Notification Settings
+  email_orders          BOOLEAN NOT NULL DEFAULT TRUE,
+  email_customers       BOOLEAN NOT NULL DEFAULT TRUE,
+  sms_orders            BOOLEAN NOT NULL DEFAULT FALSE,
+  
+  -- Timestamps
+  created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  
+  -- Ensure only one row exists
+  CONSTRAINT single_row CHECK (id = 1)
+);
+
+-- Create trigger to update updated_at timestamp
+CREATE TRIGGER trg_site_settings_updated_at
+BEFORE UPDATE ON site_settings
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+-- Insert default settings if table is empty
+INSERT INTO site_settings (id, name, email, phone, address, delivery_radius, min_order_amount, email_orders, email_customers, sms_orders)
+VALUES (1, 'NutriPlan Pro', 'contact@nutriplan.com', '+1234567890', '123 Health Street, Wellness City', 10.00, 15.00, TRUE, TRUE, FALSE)
+ON CONFLICT (id) DO NOTHING;
+
+-- Create index for faster retrieval (though only one row exists)
+CREATE INDEX IF NOT EXISTS idx_site_settings_id ON site_settings(id);
