@@ -68,10 +68,30 @@ export const getAllUsers = async () => {
   return result.rows;
 };
 
+export const getAdmins = async () => {
+  const result = await query(
+    'SELECT id, email, full_name, role, created_at FROM users WHERE role = $1 ORDER BY created_at DESC',
+    ['admin']
+  );
+  
+  return result.rows;
+};
+
+export const deleteUser = async (userId) => {
+  const result = await query(
+    'DELETE FROM users WHERE id = $1 RETURNING *',
+    [userId]
+  );
+  
+  return result.rows[0] || null;
+};
+
 export default {
   createUser,
   getUserById,
   getUserByEmail,
   updateUser,
-  getAllUsers
+  getAllUsers,
+  getAdmins,
+  deleteUser
 };

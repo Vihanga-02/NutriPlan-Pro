@@ -529,6 +529,178 @@ export const updateProfile = async (req, res) => {
   }
 };
 
+export const getAdmins = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { getAdmins } = await import('../models/userModel.js');
+    const admins = await getAdmins();
+    res.json(admins);
+  } catch (error) {
+    console.error('Get admins error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateAdminPassword = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      return res.status(400).json({ error: 'New password is required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Check if Firebase Admin is initialized
+    if (!isFirebaseInitialized() || !admin.apps.length) {
+      return res.status(500).json({ error: 'Firebase Admin is not properly configured' });
+    }
+
+    // Get Firebase user by email
+    try {
+      const firebaseUser = await admin.auth().getUserByEmail(req.user.email);
+      
+      // Update password using Firebase Admin SDK (no reauthentication needed)
+      await admin.auth().updateUser(firebaseUser.uid, {
+        password: newPassword
+      });
+
+      res.json({
+        message: 'Password updated successfully'
+      });
+    } catch (firebaseError) {
+      console.error('Firebase password update error:', firebaseError);
+      if (firebaseError.code === 'auth/user-not-found') {
+        return res.status(404).json({ error: 'User not found in Firebase Authentication' });
+      }
+      throw firebaseError;
+    }
+  } catch (error) {
+    console.error('Update admin password error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateAdminProfile = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { full_name } = req.body;
+
+    if (!full_name) {
+      return res.status(400).json({ error: 'Full name is required' });
+    }
+
+    // Update in database
+    const { updateUser } = await import('../models/userModel.js');
+    const updatedUser = await updateUser(req.user.id, { full_name });
+
+    // Update in Firebase Auth display name if user exists
+    try {
+      if (isFirebaseInitialized() && admin.apps.length) {
+        const firebaseUser = await admin.auth().getUserByEmail(req.user.email);
+        await admin.auth().updateUser(firebaseUser.uid, {
+          displayName: full_name
+        });
+      }
+    } catch (firebaseError) {
+      // If Firebase update fails, continue with database update
+      console.error('Firebase display name update error:', firebaseError);
+    }
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        full_name: updatedUser.full_name,
+        role: updatedUser.role
+      }
+    });
+  } catch (error) {
+    console.error('Update admin profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteAdmin = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    const adminIdToDelete = parseInt(id);
+
+    // Prevent self-deletion
+    if (adminIdToDelete === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    // Get the admin to delete
+    const { getUserById, deleteUser } = await import('../models/userModel.js');
+    const adminToDelete = await getUserById(adminIdToDelete);
+
+    if (!adminToDelete) {
+      return res.status(404).json({ error: 'Admin not found' });
+    }
+
+    if (adminToDelete.role !== 'admin') {
+      return res.status(400).json({ error: 'User is not an admin' });
+    }
+
+    // Delete from Firebase Auth if user exists
+    try {
+      const admin = (await import('../config/firebaseAdmin.js')).default;
+      // Try to get Firebase user by email
+      try {
+        const firebaseUser = await admin.auth().getUserByEmail(adminToDelete.email);
+        await admin.auth().deleteUser(firebaseUser.uid);
+        console.log('Firebase user deleted:', firebaseUser.uid);
+      } catch (firebaseError) {
+        // If user doesn't exist in Firebase, that's okay
+        if (firebaseError.code !== 'auth/user-not-found') {
+          console.error('Firebase deletion error:', firebaseError);
+          // Continue with database deletion even if Firebase deletion fails
+        }
+      }
+    } catch (firebaseAdminError) {
+      console.error('Firebase Admin error:', firebaseAdminError);
+      // Continue with database deletion even if Firebase Admin fails
+    }
+
+    // Delete from database
+    const deletedAdmin = await deleteUser(adminIdToDelete);
+
+    res.json({
+      message: 'Admin account deleted successfully',
+      deletedAdmin: {
+        id: deletedAdmin.id,
+        email: deletedAdmin.email,
+        full_name: deletedAdmin.full_name
+      }
+    });
+  } catch (error) {
+    console.error('Delete admin error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export default {
   signup,
   login,
@@ -537,5 +709,9 @@ export default {
   getAllUsers,
   createAdmin,
   createAdminByAdmin,
-  updateProfile
+  updateProfile,
+  getAdmins,
+  deleteAdmin,
+  updateAdminPassword,
+  updateAdminProfile
 };
