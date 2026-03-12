@@ -175,18 +175,13 @@ export const suggestFoodsForHealthScreening = async (bmi, tdee, bodyFatPct, avai
     }
   });
 
-  console.log(`[Food Suggestions] Meal type: ${mealType}, Category filter: ${mealType === 'teatime' ? 'bakery' : 'restaurant'}, Foods matching: ${foodsForMealType.length}`);
-
   if (foodsForMealType.length === 0) {
-    console.log(`[Food Suggestions] No ${mealType === 'teatime' ? 'bakery' : 'restaurant'} foods found for meal type: ${mealType}`);
     return [];
   }
 
   // Calculate max calories per meal (30% of TDEE)
   const maxCaloriesPerMeal = tdee * 0.3;
   const caloriesPerMeal = tdee / 4; // Average calories per meal
-
-  console.log(`[Food Suggestions] BMI: ${bmi}, TDEE: ${tdee}, Max calories per meal: ${maxCaloriesPerMeal}, Avg calories per meal: ${caloriesPerMeal}`);
 
   // Filter foods based on health metrics - relaxed criteria
   let filteredFoods = foodsForMealType.filter(food => {
@@ -207,17 +202,13 @@ export const suggestFoodsForHealthScreening = async (bmi, tdee, bodyFatPct, avai
     return isCalorieAppropriate && food.protein_g >= 3;
   });
 
-  console.log(`[Food Suggestions] After health filtering: ${filteredFoods.length} foods`);
-
   // If no foods match strict criteria, relax filters even more
   if (filteredFoods.length === 0) {
-    console.log('[Food Suggestions] Relaxing filters - using all foods for meal type');
     filteredFoods = foodsForMealType.filter(food => food.calories <= maxCaloriesPerMeal * 1.5);
   }
 
   // If still no foods, just return all foods for this meal type (last resort)
   if (filteredFoods.length === 0) {
-    console.log('[Food Suggestions] Last resort - returning all foods for meal type');
     filteredFoods = foodsForMealType;
   }
 
