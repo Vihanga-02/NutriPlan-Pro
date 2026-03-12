@@ -101,7 +101,6 @@ export const login = async (req, res) => {
     let decodedToken;
     try {
       decodedToken = await admin.auth().verifyIdToken(firebaseToken);
-      console.log('Firebase token verified for:', decodedToken.email);
     } catch (error) {
       console.error('Firebase token verification error:', error);
       return res.status(401).json({ error: 'Invalid or expired token: ' + error.message });
@@ -125,7 +124,6 @@ export const login = async (req, res) => {
           full_name: decodedToken.name || decodedToken.email.split('@')[0],
           role: 'user'
         });
-        console.log('New user created:', user.email);
       } catch (createError) {
         console.error('Error creating user:', createError);
         return res.status(500).json({ error: 'Failed to create user: ' + createError.message });

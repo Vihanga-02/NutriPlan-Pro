@@ -140,8 +140,6 @@ export const suggestFoods = async (req, res) => {
     // Get all available foods
     const availableFoods = await getAllFoods();
     
-    console.log(`[Food Suggestions] Total available foods: ${availableFoods.length}, Meal type: ${mealType}`);
-    
     // Suggest foods based on health metrics
     const suggestedFoods = await suggestFoodsForHealthScreening(
       parseFloat(bmi),
@@ -150,8 +148,6 @@ export const suggestFoods = async (req, res) => {
       availableFoods,
       mealType
     );
-
-    console.log(`[Food Suggestions] Final suggested foods count: ${suggestedFoods.length}`);
 
     if (suggestedFoods.length === 0) {
       const expectedCategory = mealType === 'teatime' ? 'bakery' : 'restaurant';
