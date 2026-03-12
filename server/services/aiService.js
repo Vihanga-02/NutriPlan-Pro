@@ -133,7 +133,133 @@ export const suggestSafeMeals = async (bmi, tdee, bodyFatPct, availableFoods) =>
   }).slice(0, 20);
 };
 
+export const getCurrentMealType = () => {
+  const now = new Date();
+  const hour = now.getHours();
+  
+  // Breakfast: 6-11 AM
+  if (hour >= 6 && hour < 11) {
+    return 'breakfast';
+  }
+  // Lunch: 11 AM - 3 PM
+  if (hour >= 11 && hour < 15) {
+    return 'lunch';
+  }
+  // Tea time: 3-6 PM
+  if (hour >= 15 && hour < 18) {
+    return 'teatime';
+  }
+  // Dinner: 6-11 PM
+  if (hour >= 18 && hour < 23) {
+    return 'dinner';
+  }
+  // After 11 PM to 6 AM: no suggestions
+  return null;
+};
+
+export const suggestFoodsForHealthScreening = async (bmi, tdee, bodyFatPct, availableFoods, mealType) => {
+  if (!mealType) {
+    return []; // No suggestions outside meal hours
+  }
+
+  // Filter foods by category based on meal type:
+  // - Restaurant foods: breakfast, lunch, dinner
+  // - Bakery foods: teatime
+  const foodsForMealType = availableFoods.filter(food => {
+    if (mealType === 'teatime') {
+      // Teatime: only bakery foods
+      return food.category === 'bakery';
+    } else {
+      // Breakfast, lunch, dinner: only restaurant foods
+      return food.category === 'restaurant';
+    }
+  });
+
+  console.log(`[Food Suggestions] Meal type: ${mealType}, Category filter: ${mealType === 'teatime' ? 'bakery' : 'restaurant'}, Foods matching: ${foodsForMealType.length}`);
+
+  if (foodsForMealType.length === 0) {
+    console.log(`[Food Suggestions] No ${mealType === 'teatime' ? 'bakery' : 'restaurant'} foods found for meal type: ${mealType}`);
+    return [];
+  }
+
+  // Calculate max calories per meal (30% of TDEE)
+  const maxCaloriesPerMeal = tdee * 0.3;
+  const caloriesPerMeal = tdee / 4; // Average calories per meal
+
+  console.log(`[Food Suggestions] BMI: ${bmi}, TDEE: ${tdee}, Max calories per meal: ${maxCaloriesPerMeal}, Avg calories per meal: ${caloriesPerMeal}`);
+
+  // Filter foods based on health metrics - relaxed criteria
+  let filteredFoods = foodsForMealType.filter(food => {
+    // Ensure calories are reasonable for a single meal (relaxed lower bound)
+    const isCalorieAppropriate = food.calories <= maxCaloriesPerMeal && food.calories >= 50; // Minimum 50 calories
+    
+    // For overweight/obese users, prefer lower calorie, higher protein options
+    if (bmi >= 25) {
+      return isCalorieAppropriate && food.protein_g >= 3 && food.calories <= caloriesPerMeal * 1.5;
+    }
+    
+    // For underweight users, allow higher calorie options
+    if (bmi < 18.5) {
+      return isCalorieAppropriate && food.calories <= caloriesPerMeal * 2.0;
+    }
+    
+    // Normal weight: balanced approach (relaxed protein requirement)
+    return isCalorieAppropriate && food.protein_g >= 3;
+  });
+
+  console.log(`[Food Suggestions] After health filtering: ${filteredFoods.length} foods`);
+
+  // If no foods match strict criteria, relax filters even more
+  if (filteredFoods.length === 0) {
+    console.log('[Food Suggestions] Relaxing filters - using all foods for meal type');
+    filteredFoods = foodsForMealType.filter(food => food.calories <= maxCaloriesPerMeal * 1.5);
+  }
+
+  // If still no foods, just return all foods for this meal type (last resort)
+  if (filteredFoods.length === 0) {
+    console.log('[Food Suggestions] Last resort - returning all foods for meal type');
+    filteredFoods = foodsForMealType;
+  }
+
+  // Score and sort foods
+  const scoredFoods = filteredFoods.map(food => {
+    let score = 0;
+    
+    // Higher protein is better
+    score += food.protein_g * 2;
+    
+    // Moderate carbs preferred
+    if (food.carbs_g >= 10 && food.carbs_g <= 60) {
+      score += 5;
+    }
+    
+    // Lower fat is generally better (but not too low)
+    if (food.fat_g >= 3 && food.fat_g <= 20) {
+      score += 3;
+    }
+    
+    // Prefer foods closer to ideal meal calories
+    const calorieDiff = Math.abs(food.calories - caloriesPerMeal);
+    score += (1000 - calorieDiff) / 10;
+    
+    // For overweight users, penalize high calorie foods
+    if (bmi >= 25 && food.calories > caloriesPerMeal) {
+      score -= (food.calories - caloriesPerMeal) / 5;
+    }
+    
+    return { ...food, score };
+  });
+
+  // Sort by score and return top 3
+  return scoredFoods
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ score, ...food }) => food); // Remove score from returned objects
+};
+
 export default {
   generateMealPlan,
-  suggestSafeMeals
+  suggestSafeMeals,
+  getCurrentMealType,
+  suggestFoodsForHealthScreening
 };

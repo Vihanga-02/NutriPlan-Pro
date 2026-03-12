@@ -8,6 +8,7 @@ import {
   removeFoodMealType,
   getFoodsByMealType
 } from '../models/foodModel.js';
+import { getCurrentMealType, suggestFoodsForHealthScreening } from '../services/aiService.js';
 
 export const create = async (req, res) => {
   try {
@@ -111,11 +112,73 @@ export const getByMealType = async (req, res) => {
   }
 };
 
+export const suggestFoods = async (req, res) => {
+  try {
+    const { bmi, tdee, body_fat_pct, meal_type } = req.query;
+    
+    if (!bmi || !tdee) {
+      return res.status(400).json({ error: 'BMI and TDEE are required' });
+    }
+
+    // Use meal_type from client if provided, otherwise determine from server time
+    let mealType = meal_type || getCurrentMealType();
+    
+    // Validate meal type
+    const validMealTypes = ['breakfast', 'lunch', 'teatime', 'dinner'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return res.status(400).json({ error: 'Invalid meal type' });
+    }
+    
+    if (!mealType) {
+      return res.json({
+        mealType: null,
+        message: 'No meal suggestions available outside meal hours (6 AM - 11 PM)',
+        foods: []
+      });
+    }
+
+    // Get all available foods
+    const availableFoods = await getAllFoods();
+    
+    console.log(`[Food Suggestions] Total available foods: ${availableFoods.length}, Meal type: ${mealType}`);
+    
+    // Suggest foods based on health metrics
+    const suggestedFoods = await suggestFoodsForHealthScreening(
+      parseFloat(bmi),
+      parseFloat(tdee),
+      body_fat_pct ? parseFloat(body_fat_pct) : null,
+      availableFoods,
+      mealType
+    );
+
+    console.log(`[Food Suggestions] Final suggested foods count: ${suggestedFoods.length}`);
+
+    if (suggestedFoods.length === 0) {
+      const expectedCategory = mealType === 'teatime' ? 'bakery' : 'restaurant';
+      return res.json({
+        mealType,
+        message: `No ${expectedCategory} food suggestions available for ${mealType}. Please ensure ${expectedCategory} foods are available in the menu.`,
+        foods: []
+      });
+    }
+
+    res.json({
+      mealType,
+      message: `Suggested ${mealType} options based on your health metrics`,
+      foods: suggestedFoods
+    });
+  } catch (error) {
+    console.error('Suggest foods error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export default {
   create,
   getAll,
   getById,
   update,
   remove,
-  getByMealType
+  getByMealType,
+  suggestFoods
 };
